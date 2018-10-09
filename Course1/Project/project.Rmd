@@ -1,0 +1,202 @@
+---
+title: "Exploring the BRFSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+```{r}
+
+```
+
+## Introduction
+
+In this mini-project, we observe the Behavioral Risk Factor Surveillance System (BRFSS) dataset. BRFSS is a collaborate project of United States (US) which measures behavioral risk factors for the non-institutionalized adult population in US. This project consists in establishing some exploratory data analysis which give us a global point of view for some research questions.
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+options(dplyr.print_max=1000)
+```
+
+### Load data
+
+```{r load-data}
+load("brfss2013.RData")
+```
+
+
+
+***
+
+## Part 1: Data
+The observations in the sample brfss2013 were collected from the non-institutionalized adult population (18 years of age and older) in the United States using a cluster sampling. The clusters are the "states" of US. In each "state", the survey was conducted to the randomly selected adults in households (via landline telephones) and in private residences or college housings (via cellphones). 
+
+**Biases**: There are two sources of biases in this survey sampling.
+<ul>
+<li> Convenience sample: The sampling covers only adults who live in households, private residences and college housings, and have telephones. </li> 
+<li> Non-reponse: Since the survey was conducted via telephone, some people were unable or unwilling to parpicipate. </li> 
+</ul>
+
+**Generalizability**: Thus, results can be generalizable to the population of adults who live in households, private residences and college housings, and have telephones.
+
+**Causuality**: Since the study used no random assignment, it can not make causual conclusions.
+
+***
+
+## Part 2: Research questions
+
+**Research quesion 1:**
+<ul>
+<li> **Variables involed**: methlth (reponse), physhlth and income2 (explanatory).</li>
+<li> **Question**: We aim to exploit the relation between Hapiness, Income with Physical Health. Does a happy or rich person also have a good Physical Health? 
+</ul>
+
+
+**Research quesion 2:**
+<ul>
+<li> **Variables involed**: income2 (reponse), sex and educa (explanatory).</li>
+<li> **Question**: Does Education Levels corelate with Income Levels? Does a difference of Income between male and female exist? </li>
+</ul>
+
+**Research quesion 3:**
+<ul>
+<li> **Variables involed**: weight_status (reponse) and exerany2 (explanatory). weight_status is a new variable that I introduce by calculating the Body mass index (BMI) from variables weight2 and height3, and classifying by 5 levels (Underweight, Normal, Overweight, Obsese/Moderately Obese, Severely/Morbidly Obsese). See http://www.aqua-calc.com/calculate/body-mass-index for more information. 
+ </li>
+<li> **Question**: Do exercises help you get in shape?
+</ul>
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+### Research quesion 1
+Before proceeding EDA, I introduce a new variable: inc_twolevels which is a simplyfied version of variable income2. It includes only two groups of Income "Less than \$25k" and "More than \$25k". This variable will be used in Question 1 and 2 which simplyfies the statistics and makes the graph easier to read.
+
+```{r}
+inc_twolevels = factor(rep(NA,length(brfss2013$income2)),levels = c("Less than $25k","More than $25k"))
+inc_twolevels[brfss2013$inc == "Less than $75,000"|brfss2013$inc =="$75,000 or more"
+              |brfss2013$inc == "Less than $50,000"|brfss2013$inc == "Less than $35,000"]="More than $25k"
+inc_twolevels[brfss2013$inc == "Less than $25,000"|brfss2013$inc == "Less than $20,000"
+              |brfss2013$inc == "Less than $15,000"|brfss2013$inc == "Less than $10,000"]="Less than $25k"
+```
+
+Let us now treat the first research question. 
+
+#### 1. Selecting and Cleaning the data 
+I select three variables involved with this question: menthlth, physhlth and inc_twolevels, put them in men_phy_sex, and clean them.
+
+```{r}
+
+men_phy_sex = data.frame(inc = inc_twolevels,men=brfss2013$menthlth,phy=brfss2013$physhlth)
+men_phy_sex = men_phy_sex %>% filter(!is.na(inc),!is.na(men),!is.na(phy)
+                                     ,phy<=30,phy>=1,men<=30,men>=1) 
+
+```
+
+#### 2. Numerical summaries 
+The Mental Health (Hapiness) (resp. Physical Health) of a person are respectively measured by menthlth (resp. physhlth), i.e., the number of days that his/her Mental Health (resp. Physical Health) **does not** good. These variables vary between 1 and 30. 
+
+The following numerical summaries divide the sample into 2 groups: The people with Income more than 25.000 USD and Less than 25.000 USD. For each group, I calculate the average of physhlth for each level of menthlth.
+
+```{r}
+options(width = 100)
+gr = men_phy_sex %>% group_by(men,inc) %>% summarise(mean_phy = mean(phy))
+poor = gr%>%filter(inc=="Less than $25k")
+rich = gr%>%filter(inc=="More than $25k")
+numerical_summary = data.frame(poor$men,poor$mean_phy,
+                      rich$mean_phy)
+colnames(numerical_summary) = c("Mental Health","  Mean Physical Health (Less than $25k) ","  Mean Physical Health (More than $25k)")
+print(numerical_summary)
+```
+
+#### 3. Visualizations
+I draw the graph corresponding to the numerical summaries.
+
+```{r}
+colnames(gr) = c("Mental Health","Income Levels","Mean Physical Health")
+ggplot(gr,aes(x=`Mental Health`,y=`Mean Physical Health`,colour=`Income Levels`))+  geom_point(alpha=0.3) + facet_wrap( ~ `Income Levels`, ncol=2)
+
+```
+
+Observe that the Mental Health correlates positively with the mean of Physical Health. It shows that a happy person has also a good Physical Health and vice versa. Moreover, it seems that the people with high income level have a better physical health than the people with low income level. 
+
+
+### Research quesion 2
+#### 1. Selecting and Cleaning the data 
+I select three variables involved with this question: educa, sex and inc_twolevels, put them in sex_edu_inc, and clean them.
+
+```{r}
+sex_edu_inc = data.frame(edu = as.factor(brfss2013$educa),inc=inc_twolevels,sex=as.factor(brfss2013$sex))
+sex_edu_inc = sex_edu_inc %>% filter(!is.na(inc),!is.na(edu),!is.na(sex)) 
+```
+
+#### 2. Numerical summaries 
+The following numerical summaries divide the sample into 12 groups corresponding to the levels of the couple (educa,sex). For each group, I calculate the proportion of people with Income less than 25.000 USD and more than 25.000 USD.
+
+```{r}
+options(width = 100)
+summarise_sex_edu_inc = sex_edu_inc %>% group_by(edu,sex,inc)%>%summarise(n = n()) %>% mutate(prop = n/sum(n))
+print(data.frame(Education = summarise_sex_edu_inc$edu,Sex = summarise_sex_edu_inc$sex,
+                 Income = summarise_sex_edu_inc$inc,
+                 Proportion = summarise_sex_edu_inc$prop))
+```
+
+#### 3. Visualizations
+I draw the graph corresponding to the numerical summaries.
+
+```{r}
+colnames(sex_edu_inc) = c("Education Levels","Income Levels","Sex")
+ggplot(sex_edu_inc, aes(x=`Sex`, fill = `Income Levels`)) +
+  geom_bar(position = 'fill') + facet_wrap( ~ `Education Levels`, ncol=2)
+```
+
+Observe that the proportion of high income people tends to increase though Education level. Especially, for the same education level, the proportion of high income people is always higher in the case of Male. Since we don not have causuality, we can not discuss about sex discrimination. However, we observe a big difference of Income by Sex.
+
+
+### Research quesion 3
+#### 1. Selecting and Cleaning the data
+I select three variables involved with this question: exerany2, weight2 and height3, put them in gym_wei_hei, and clean them.
+
+```{r}
+gym_wei_hei = data.frame(Exercises = brfss2013$exerany2,wei=as.numeric(brfss2013$weight2),hei=as.numeric(brfss2013$height3))
+gym_wei_hei = gym_wei_hei %>% filter(!is.na(Exercises),!is.na(wei),!is.na(hei)) 
+```
+
+#### 2. Numerical summaries
+Before proceeding the numerical summaries. I calculate Body Mass Index (BMI) of each person by her/his weight and height. Next, I introduce a new variable body_category (body category) which classifies BMI by 5 levels: Underweight, Normal, Overweight, Obese/Moderately Obese and Severely/Morbidly Obese.
+
+```{r}
+gym_wei_hei = gym_wei_hei %>% mutate(bmi = 703*gym_wei_hei$wei/((gym_wei_hei$hei/10)^2))
+Body_category = factor(rep(NA,length(gym_wei_hei$bmi)),levels = c("Underweight","Normal","Overweight","Obese/Moderately Obese","Severely/Morbidly Obese"))
+Body_category[gym_wei_hei$bmi<=15] = "Underweight"
+Body_category[gym_wei_hei$bmi>15 & gym_wei_hei$bmi<=25] = "Normal"
+Body_category[gym_wei_hei$bmi>25 & gym_wei_hei$bmi<=27] = "Overweight"
+Body_category[gym_wei_hei$bmi>27 & gym_wei_hei$bmi<=35] = "Obese/Moderately Obese"
+Body_category[gym_wei_hei$bmi>35] = "Severely/Morbidly Obese"
+gym_wei_hei = gym_wei_hei %>% mutate(Body_category)
+```
+
+The numerical summaries divide the sample into 2 groups: did and did not in any physiscal activities and exercises during the past month. In each group, I calculate the proportion of body categories.
+
+```{r}
+gym_wei_hei_summarise = gym_wei_hei %>% group_by(Exercises,Body_category)%>%summarise(n=n())%>%mutate(Proportion = n/sum(n))
+print(data.frame(Exercises = gym_wei_hei_summarise$Exercises, Body_category = gym_wei_hei_summarise$Body_category, Proportion = gym_wei_hei_summarise$Proportion))
+```
+
+#### 3. Visualizations
+
+```{r}
+ggplot(gym_wei_hei,aes(x=Exercises,fill=Body_category))+geom_bar(position="fill")
+
+```
+
+Comparing two groups, observe that the proportion of Overweight/Obsese is higher in the non-Exercise group and the proportion of Normal/Underweight is higher in the Exercise group. Thus, the people who do exercise tend to get a better shape and have a small risk of obesity.
+
+# Conclusion
+Three researches questions are imposed in this project which describe some aspects in the life. Namely, the relations Income Levels - Hapiness - Physical Health, Education Levels - Income Levels - Sex, and Exercises - Body Shape. The exploratory data analysis furnishes a panorama about that. However, without causuality and statistical tests, we can not state the concrete conclusions.
